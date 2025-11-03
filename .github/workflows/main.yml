@@ -1,0 +1,57 @@
+# .github/workflows/list-nfts.yaml
+
+name: List NFTs on OpenSea
+
+on:
+  # This allows you to run the workflow manually from the Actions tab.
+  # The 'inputs' block creates a form for you to fill out.
+  workflow_dispatch:
+    inputs:
+      listing_price_in_eth:
+        description: 'Listing price per NFT in ETH'
+        required: true
+        default: '0.000091'
+        type: string
+      listing_duration_minutes:
+        description: 'Duration for each listing in minutes'
+        required: true
+        default: '15' # 24 hours
+        type: string
+
+jobs:
+  list-nfts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run NFT Listing Script
+        run: node main.js
+        env:
+          # --- Static values are read from GitHub Secrets ---
+          # You must configure these in your repository's Settings > Secrets and variables > Actions
+          OPENSEA_API_KEY: ${{ secrets.OPENSEA_API_KEY }}
+          RPC_URL: ${{ secrets.RPC_URL }}
+          TARGET_CONTRACT_ADDRESS: ${{ secrets.TARGET_CONTRACT_ADDRESS }}
+          WALLETS: ${{ secrets.WALLETS }}
+          PRIVATE_KEYS: ${{ secrets.PRIVATE_KEYS }}
+
+          # --- Dynamic values are read from the manual inputs you provide when running the workflow ---
+          LISTING_PRICE_IN_ETH: ${{ inputs.listing_price_in_eth }}
+          LISTING_DURATION_MINUTES: ${{ inputs.listing_duration_minutes }}
+
+      - name: Upload log file as artifact
+        if: always() # This ensures the log is uploaded even if the script fails
+        uses: actions/upload-artifact@v4
+        with:
+          name: listing-log
+          path: listing_log.txt
