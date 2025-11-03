@@ -52,41 +52,110 @@ function getWallet(privateKey) {
 
 // --- Main Listing Function ---
 async function listNFT(wallet, nft, priceInEth) {
-    const logMessage = `Attempting to list ${nft.name} (Token ID: ${nft.identifier}) from wallet ${wallet.address} for ${priceInEth} ETH`;
+    const logMessage = `Attempting to list ${nft.name || 'NFT'} (Token ID: ${nft.identifier}) from wallet ${wallet.address} for ${priceInEth} ETH`;
     console.log(`[START] ${logMessage}`);
     logToFile(`[START] ${logMessage}`);
 
     try {
+        const priceInWei = ethers.utils.parseEther(priceInEth);
         const now = Math.floor(Date.now() / 1000);
         const durationInSeconds = parseInt(LISTING_DURATION_MINUTES) * 60;
 
-        const domain = { name: 'Seaport', version: '1.5', chainId: CHAIN_ID, verifyingContract: SEAPORT_CONTRACT_ADDRESS };
-        const types = { /* ... same as before ... */ };
-        const offer = [{ /* ... same as before ... */ }];
-        const consideration = [{ /* ... same as before ... */ }];
-        const orderComponents = { /* ... same as before ... */ };
+        // --- Seaport Order Components ---
+        const domain = {
+            name: 'Seaport',
+            version: '1.5',
+            chainId: CHAIN_ID,
+            verifyingContract: SEAPORT_CONTRACT_ADDRESS,
+        };
+
+        const types = {
+            OrderComponents: [
+                { name: 'offerer', type: 'address' },
+                { name: 'zone', type: 'address' },
+                { name: 'offer', type: 'OfferItem[]' },
+                { name: 'consideration', type: 'ConsiderationItem[]' },
+                { name: 'orderType', type: 'uint8' },
+                { name: 'startTime', type: 'uint256' },
+                { name: 'endTime', type: 'uint256' },
+                { name: 'zoneHash', type: 'bytes32' },
+                { name: 'salt', type: 'uint256' },
+                { name: 'conduitKey', type: 'bytes32' },
+                { name: 'counter', type: 'uint256' },
+            ],
+            OfferItem: [
+                { name: 'itemType', type: 'uint8' },
+                { name: 'token', type: 'address' },
+                { name: 'identifierOrCriteria', type: 'uint256' },
+                { name: 'startAmount', type: 'uint256' },
+                { name: 'endAmount', type: 'uint256' },
+            ],
+            ConsiderationItem: [
+                { name: 'itemType', type: 'uint8' },
+                { name: 'token', type: 'address' },
+                { name: 'identifierOrCriteria', type: 'uint256' },
+                { name: 'startAmount', type: 'uint256' },
+                { name: 'endAmount', type: 'uint256' },
+                { name: 'recipient', type: 'address' },
+            ],
+        };
+
+        const offer = [{
+            itemType: 2, // ERC721
+            token: nft.contract,
+            identifierOrCriteria: nft.identifier,
+            startAmount: '1',
+            endAmount: '1',
+        }];
+
+        const consideration = [{
+            itemType: 0, // Native ETH
+            token: '0x0000000000000000000000000000000000000000',
+            identifierOrCriteria: '0',
+            startAmount: priceInWei.toString(),
+            endAmount: priceInWei.toString(),
+            recipient: wallet.address,
+        }];
+
+        const orderComponents = {
+            offerer: wallet.address,
+            zone: '0x0000000000000000000000000000000000000000',
+            offer: offer,
+            consideration: consideration,
+            orderType: 0, // FULL_OPEN
+            startTime: now,
+            endTime: now + durationInSeconds,
+            zoneHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+            salt: ethers.BigNumber.from(ethers.utils.randomBytes(32)).toString(),
+            conduitKey: '0x0000007b02230091a7ed01230072f706a00400000000000000000000000000',
+            counter: '0',
+        };
         
         const signature = await wallet._signTypedData(domain, types, orderComponents);
 
-        const response = await axios.post(`${OPENSEA_API_BASE_URL}/listings`, {
-            ...orderComponents,
-            signature: signature,
+        const payload = {
+            parameters: {
+                ...orderComponents,
+                signature: signature,
+            },
             protocol_address: SEAPORT_CONTRACT_ADDRESS,
-        }, {
+        };
+
+        const response = await axios.post(`${OPENSEA_API_BASE_URL}/listings`, payload, {
             headers: { 'X-API-KEY': OPENSEA_API_KEY, 'Content-Type': 'application/json' }
         });
 
-        const successMessage = `SUCCESS: NFT "${nft.name}" listed! Link: https://opensea.io/assets/base/${nft.contract}/${nft.identifier}`;
+        const successMessage = `SUCCESS: NFT "${nft.name || 'NFT'}" listed! Link: https://opensea.io/assets/base/${nft.contract}/${nft.identifier}`;
         console.log(`[SUCCESS] ${successMessage}`);
         logToFile(`[SUCCESS] ${successMessage}`);
         return true;
 
     } catch (error) {
-        const errorMessage = `FAILED: Error listing NFT ${nft.name} (ID: ${nft.identifier}). Reason: ${error.message}`;
+        const errorMessage = `FAILED: Error listing NFT ${nft.name || 'NFT'} (ID: ${nft.identifier}). Reason: ${error.response?.data?.message || error.message}`;
         console.error(`[FAILED] ${errorMessage}`);
         logToFile(`[FAILED] ${errorMessage}`);
         if (error.response) {
-            logToFile(`[FAILED] Error Details: ${JSON.stringify(error.response.data)}`);
+            logToFile(`[FAILED] Error Details: ${JSON.stringify(error.response.data, null, 2)}`);
         }
         return false;
     }
@@ -120,10 +189,10 @@ async function main() {
             logToFile(`Found ${targetNfts.length} NFTs from the target contract.`);
             for (const nft of targetNfts) {
                 await listNFT(wallet, nft, LISTING_PRICE_IN_ETH);
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
+                await new Promise(resolve => setTimeout(resolve, 2000)); 
             }
         } catch (error) {
-            const fetchError = `Failed to fetch NFTs from wallet ${walletAddress}. Reason: ${error.message}`;
+            const fetchError = `Failed to fetch NFTs from wallet ${walletAddress}. Reason: ${error.response?.data?.message || error.message}`;
             console.error(fetchError);
             logToFile(fetchError);
         }
