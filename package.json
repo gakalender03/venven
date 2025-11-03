@@ -1,0 +1,23 @@
+{
+  "name": "nft-listing-script",
+  "version": "1.0.0",
+  "description": "A Node.js script to list NFTs on OpenSea using the Seaport protocol.",
+  "main": "sell-nfts.js",
+  "scripts": {
+    "start": "node sell-nfts.js"
+  },
+  "keywords": [
+    "nft",
+    "opensea",
+    "seaport",
+    "ethereum",
+    "base",
+    "listing"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.2",
+    "ethers": "^5.7.2"
+  }
+}
